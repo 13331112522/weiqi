@@ -1,0 +1,4 @@
+# 围棋游戏后端依赖
+# 安装：pip install -r requirements.txt
+
+websockets>=12.0
