@@ -1,0 +1,29 @@
+# Fly.io配置文件
+# 用于部署围棋游戏WebSocket服务器
+
+app = "weiqi-game"
+primary_region = "sin"
+
+[build]
+  # 使用Dockerfile构建
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  # 禁用健康检查（纯WebSocket服务器）
+  # [[http_service.checks]]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
