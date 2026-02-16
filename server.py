@@ -9,13 +9,24 @@
     python server.py
 
 前端会连接到：ws://localhost:8080
+
+Render部署会自动使用环境变量PORT
 """
 
 import asyncio
 import websockets
 import json
+import os
 from datetime import datetime
 from typing import Dict, Set
+
+# ==================== 配置 ====================
+
+# Render.com 提供环境变量 PORT，默认使用 8080
+PORT = int(os.environ.get("PORT", 8080))
+
+# Render.com 需要监听 0.0.0.0 才能接受外部连接
+HOST = os.environ.get("HOST", "0.0.0.0")
 
 # ==================== 数据结构 ====================
 
@@ -162,24 +173,6 @@ async def handle_join_room(websocket, data: dict):
         await websocket.send(json.dumps(response))
         log(f"加入失败：房间 {room_id} 已满")
         return
-
-    # 检查这个websocket是否已经在这个房间中（创建者重新加入）
-    """if websocket in connected_clients:
-        client_info = connected_clients[websocket]
-        if client_info["roomId"] == room_id:
-            # 已经在房间中，返回成功
-            player_id = client_info["playerId"]
-            player_color = client_info["color"]
-            response = {
-                "type": "room_joined",
-                "success": True,
-                "roomId": room_id,
-                "playerId": player_id,
-                "playerColor": player_color
-            }
-            await websocket.send(json.dumps(response))
-            log(f"玩家 {player_id} 重新进入房间 {room_id}，颜色：{player_color}")
-            return"""
 
     # 生成玩家ID
     player_id = generate_player_id()
@@ -374,21 +367,6 @@ async def handle_place_stone(websocket, data: dict):
         await websocket.send(json.dumps(response))
         return
 
-    # 获取玩家的固定颜色
-    #player_color = room["players"][player_id]["color"]
-
-    # 检查玩家是否使用了正确的颜色
-    """if color != player_color:
-        color_name = "黑" if player_color == 1 else "白"
-        response = {
-            "type": "move_placed",
-            "success": False,
-            "message": f"你只能下{color_name}子"
-        }
-        await websocket.send(json.dumps(response))
-        log(f"落子失败：玩家{player_id}尝试使用错误的颜色 (期望{player_color}, 实际{color})")
-        return"""
-
     # 检查是否轮到该玩家
     if room["currentPlayer"] != color:
         response = {
@@ -545,15 +523,15 @@ async def handle_client(websocket, path):
 async def main():
     """
     启动WebSocket服务器
-    监听端口：8080
-    地址：ws://localhost:8080
+    本地开发：监听地址 0.0.0.0:8080
+    Render部署：自动使用环境变量 PORT
     """
     log("启动围棋游戏服务器...")
-    log("监听地址：ws://localhost:8080")
+    log(f"监听地址：{HOST}:{PORT}")
     log("等待客户端连接...")
 
     # 创建WebSocket服务器
-    async with websockets.serve(handle_client, "localhost", 8080):
+    async with websockets.serve(handle_client, HOST, PORT):
         # 持续运行，直到手动停止（Ctrl+C）
         await asyncio.Future()  # 永久运行
 
