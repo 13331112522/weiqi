@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<head><title>weiqi</title>
+<style>
+        /* 简单样式优化，让界面更美观（可选，核心功能不受影响） */
+        body {
+            margin: 20px;  /* 页面边距，避免内容贴边 */
+            font-family: "Microsoft YaHei", sans-serif;  /* 中文友好字体 */
+            /* 禁止整个页面的文本选择和点击高亮 */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        button {
+            padding: 8px 16px;  /* 按钮内边距 */
+            font-size: 16px;    /* 按钮文字大小 */
+            cursor: pointer;    /* 鼠标悬浮变手型 */
+            background-color: #4CAF50;  /* 绿色背景 */
+            color: white;       /* 白色文字 */
+            border: none;       /* 去掉边框 */
+            border-radius: 4px; /* 圆角 */
+            user-select: none;  /* 按钮文字不可选择 */
+            -webkit-user-select: none;
+        }
+        input {
+            padding: 8px;       /* 输入框内边距 */
+            font-size: 16px;    /* 输入框文字大小 */
+            width: 200px;       /* 输入框宽度 */
+            margin-top: 10px;   /* 和按钮拉开间距 */
+            user-select: text;  /* 输入框可以选择文字 */
+            -webkit-user-select: text;
+        }
+
+        /* 棋盘样式 */
+        .board-container {
+            display: none;      /* 默认隐藏 */
+            text-align: center;
+            user-select: none;   /* 禁用文本选择 */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        .board {
+            display: inline-block;
+            background-color: #DCB35C;  /* 木纹色 */
+            padding: 25px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .board-grid {
+            position: relative;
+            width: 580px;
+            height: 580px;
+            padding: 20px;
+            background-color: #DCB35C;
+        }
+
+        /* 19×19网格线容器 */
+        .grid-lines {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 540px;
+            height: 540px;
+            box-shadow: 0 0 0 1px #000;  /* 用box-shadow模拟边框，不影响内部尺寸 */
+        }
+
+        /* 用SVG绘制精确的19×19网格 */
+        .grid-lines svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 棋子样式 */
+        .stone {
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .stone.black {
+            background: radial-gradient(circle at 30% 30%, #555, #000);
+        }
+
+        .stone.white {
+            background: radial-gradient(circle at 30% 30%, #fff, #ccc);
+            border: 1px solid #999;
+        }
+
+        /* 交叉点点击区域 */
+        .intersection {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 10;
+            user-select: none;          /* 禁用文本选择 */
+            -webkit-tap-highlight-color: transparent;  /* 禁用移动端点击高亮 */
+            outline: none;               /* 移除焦点轮廓 */
+        }
+
+        .intersection:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+        }
+
+        .intersection:active {
+            outline: none;
+        }
+
+        /* 禁用棋盘的文本选择 */
+        .board,
+        .board-grid {
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 当前玩家指示器 */
+        .player-indicator {
+            font-size: 20px;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .current-stone {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            vertical-align: middle;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+<div id="welcome">
+    <h1>WELCOME</h1>
+    <button id="createRoomBtn">Make a new room</button>
+    <br><br>
+    <input type="text" id="roomIdInput" placeholder="input room id">
+    <button id="joinRoomBtn">Join Room</button>
+    <br><br>
+    <div id="message" style="color: blue; font-size: 18px;"></div>
+</div>
+
+<!-- 棋盘界面 -->
+<div id="boardContainer" class="board-container">
+    <h2>围棋棋盘</h2>
+    <div class="player-indicator">
+        当前轮到: <span id="currentPlayerText">黑方</span>
+        <span id="currentStone" class="current-stone" style="background: radial-gradient(circle at 30% 30%, #555, #000);"></span>
+    </div>
+    <br>
+    <div class="board">
+        <div class="board-grid" id="boardGrid">
+            <!-- SVG绘制精确的19x19网格 -->
+            <div class="grid-lines">
+                <svg viewBox="0 0 540 540" preserveAspectRatio="none">
+                    <!-- 19条竖线，间距30px -->
+                    <g stroke="#000" stroke-width="1">
+                        <line x1="0" y1="0" x2="0" y2="540"/>
+                        <line x1="30" y1="0" x2="30" y2="540"/>
+                        <line x1="60" y1="0" x2="60" y2="540"/>
+                        <line x1="90" y1="0" x2="90" y2="540"/>
+                        <line x1="120" y1="0" x2="120" y2="540"/>
+                        <line x1="150" y1="0" x2="150" y2="540"/>
+                        <line x1="180" y1="0" x2="180" y2="540"/>
+                        <line x1="210" y1="0" x2="210" y2="540"/>
+                        <line x1="240" y1="0" x2="240" y2="540"/>
+                        <line x1="270" y1="0" x2="270" y2="540"/>
+                        <line x1="300" y1="0" x2="300" y2="540"/>
+                        <line x1="330" y1="0" x2="330" y2="540"/>
+                        <line x1="360" y1="0" x2="360" y2="540"/>
+                        <line x1="390" y1="0" x2="390" y2="540"/>
+                        <line x1="420" y1="0" x2="420" y2="540"/>
+                        <line x1="450" y1="0" x2="450" y2="540"/>
+                        <line x1="480" y1="0" x2="480" y2="540"/>
+                        <line x1="510" y1="0" x2="510" y2="540"/>
+                        <line x1="540" y1="0" x2="540" y2="540"/>
+                    </g>
+                    <!-- 19条横线，间距30px -->
+                    <g stroke="#000" stroke-width="1">
+                        <line x1="0" y1="0" x2="540" y2="0"/>
+                        <line x1="0" y1="30" x2="540" y2="30"/>
+                        <line x1="0" y1="60" x2="540" y2="60"/>
+                        <line x1="0" y1="90" x2="540" y2="90"/>
+                        <line x1="0" y1="120" x2="540" y2="120"/>
+                        <line x1="0" y1="150" x2="540" y2="150"/>
+                        <line x1="0" y1="180" x2="540" y2="180"/>
+                        <line x1="0" y1="210" x2="540" y2="210"/>
+                        <line x1="0" y1="240" x2="540" y2="240"/>
+                        <line x1="0" y1="270" x2="540" y2="270"/>
+                        <line x1="0" y1="300" x2="540" y2="300"/>
+                        <line x1="0" y1="330" x2="540" y2="330"/>
+                        <line x1="0" y1="360" x2="540" y2="360"/>
+                        <line x1="0" y1="390" x2="540" y2="390"/>
+                        <line x1="0" y1="420" x2="540" y2="420"/>
+                        <line x1="0" y1="450" x2="540" y2="450"/>
+                        <line x1="0" y1="480" x2="540" y2="480"/>
+                        <line x1="0" y1="510" x2="540" y2="510"/>
+                        <line x1="0" y1="540" x2="540" y2="540"/>
+                    </g>
+                    <!-- 9个星位点 -->
+                    <g fill="#000">
+                        <circle cx="90" cy="90" r="4"/>
+                        <circle cx="270" cy="90" r="4"/>
+                        <circle cx="450" cy="90" r="4"/>
+                        <circle cx="90" cy="270" r="4"/>
+                        <circle cx="270" cy="270" r="4"/>
+                        <circle cx="450" cy="270" r="4"/>
+                        <circle cx="90" cy="450" r="4"/>
+                        <circle cx="270" cy="450" r="4"/>
+                        <circle cx="450" cy="450" r="4"/>
+                    </g>
+                </svg>
+            </div>
+            <!-- 交叉点将由JavaScript生成 -->
+        </div>
+    </div>
+    <br><br>
+    <button onclick="location.reload()">退出房间</button>
+    <button onclick="resetGame()">重新开始</button>
+</div>
+
+<script>
+    /*
+     * ==================== JavaScript基础概念（对比Python） ====================
+     *
+     * 1. 变量声明：
+     *    - JavaScript: const（常量）, let（可变变量）
+     *    - Python: 所有变量都可变
+     *
+     * 2. 对象/字典：
+     *    - JavaScript: const obj = {key: value}
+     *    - Python: obj = {"key": value}
+     *
+     * 3. 函数定义：
+     *    - JavaScript: function funcName() {} 或 const func = () => {}
+     *    - Python: def func_name(): pass
+     *
+     * 4. null/None：
+     *    - JavaScript: null
+     *    - Python: None
+     *
+     * 5. 布尔值：
+     *    - JavaScript: true/false
+     *    - Python: True/False
+     *
+     * 6. 条件判断：
+     *    - JavaScript: if (condition) {} else {}
+     *    - Python: if condition: pass else: pass
+     *
+     * 7. 相等比较：
+     *    - JavaScript: === (严格相等)
+     *    - Python: ==
+     *
+     * 8. 字符串拼接：
+     *    - JavaScript: 'Hello ' + name 或 `Hello ${name}`
+     *    - Python: 'Hello ' + name 或 f'Hello {name}'
+     *
+     * 9. 循环：
+     *    - JavaScript: for (let i = 0; i < 10; i++)
+     *    - Python: for i in range(10)
+     *
+     * 10. 数组/列表：
+     *     - JavaScript: const arr = [1, 2, 3]; arr.push(4)
+     *     - Python: arr = [1, 2, 3]; arr.append(4)
+     *
+     * 11. DOM操作（网页元素操作）：
+     *     - JavaScript: document.getElementById('id')
+     *     - Python: 需要使用Selenium或BeautifulSoup等库
+     */
+
+    // ==================== WebSocket配置 ====================
+    // 类似Python的字典，用于存储配置信息
+    const WS_CONFIG = {
+        url: 'ws://localhost:8080/ws',  // WebSocket服务器地址
+        reconnectInterval: 3000,        // 重连间隔（毫秒）
+        debug: true                     // 是否开启调试模式（打印日志）
+    };
+
+    let ws = null;                      // WebSocket连接实例（类似Python的 None）
+    let currentRoomId = null;           // 当前房间ID
+    let playerId = null;                // 当前玩家ID
+
+    /*
+     * 函数名: initWebSocket()
+     * 作用: 初始化WebSocket连接到服务器
+     * Python对比:
+     *   def init_websocket():
+     *       if ws and ws.is_connecting():
+     *           return
+     *       try:
+     *           ws = WebSocket(WS_CONFIG['url'])
+     *           ws.on_open = lambda: log('连接成功')
+     *       except Exception as e:
+     *           log(f'连接失败: {e}')
+     */
+    function initWebSocket() {
+        // 检查是否已经连接或正在连接
+        // !ws 是逻辑非，相当于Python的 if not ws or ws.readyState in [...]
+        if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+            return; // 已经连接或正在连接，直接返回
+        }
+
+        try {
+            // 创建新的WebSocket连接
+            // 类似Python: ws = WebSocket(url)
+            ws = new WebSocket(WS_CONFIG.url);
+
+            // 连接成功时的回调函数（事件处理器）
+            // 类似Python的装饰器或回调函数
+            ws.onopen = function(event) {
+                log('WebSocket连接成功');
+            };
+
+            // 收到消息时的回调函数
+            // event.data 包含服务器发送的数据
+            ws.onmessage = function(event) {
+                handleMessage(event.data); // 调用handleMessage函数处理消息
+            };
+
+            // 发生错误时的回调函数
+            ws.onerror = function(error) {
+                log('WebSocket错误: ' + error);
+            };
+
+            // 连接关闭时的回调函数
+            // setTimeout: 延迟执行函数（类似Python的threading.Timer）
+            ws.onclose = function(event) {
+                log('WebSocket连接关闭，将在' + WS_CONFIG.reconnectInterval + 'ms后重连');
+                setTimeout(initWebSocket, WS_CONFIG.reconnectInterval);
+            };
+        } catch (error) {
+            // 类似Python的 except Exception as e
+            log('WebSocket连接失败: ' + error);
+        }
+    }
+
+    /*
+     * 函数名: sendToServer(data)
+     * 作用: 将数据转换为JSON格式并发送到服务器
+     * 参数: data - JavaScript对象（类似Python的字典）
+     * 返回: true表示发送成功，false表示失败
+     * Python对比:
+     *   def send_to_server(data):
+     *       if not ws or not ws.is_open():
+     *           return False
+     *       try:
+     *           json_data = json.dumps(data)
+     *           ws.send(json_data)
+     *           return True
+     *       except Exception as e:
+     *           return False
+     */
+    function sendToServer(data) {
+        // 检查WebSocket是否连接
+        // !ws 是"ws是null或undefined"，ws.readyState !== WebSocket.OPEN是"未打开"
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            log('WebSocket未连接，无法发送数据');
+            return false; // 返回False（类似Python）
+        }
+
+        try {
+            // JSON.stringify: 将JavaScript对象转换为JSON字符串
+            // 类似Python的 json.dumps()
+            const json = JSON.stringify(data);
+            ws.send(json); // 发送JSON字符串到服务器
+
+            // 如果调试模式开启，打印发送的数据
+            if (WS_CONFIG.debug) {
+                log('发送: ' + json);
+            }
+            return true; // 返回True
+        } catch (error) {
+            log('发送数据失败: ' + error);
+            return false;
+        }
+    }
+
+    /*
+     * 函数名: handleMessage(message)
+     * 作用: 处理从服务器收到的消息
+     * 参数: message - JSON格式的字符串
+     * Python对比:
+     *   def handle_message(message):
+     *       try:
+     *           data = json.loads(message)
+     *           if data['type'] == 'room_created':
+     *               handle_room_created(data)
+     *           elif data['type'] == 'room_joined':
+     *               handle_room_joined(data)
+     *           # ...
+     *       except Exception as e:
+     *           log(f'解析失败: {e}')
+     */
+    function handleMessage(message) {
+        try {
+            // JSON.parse: 将JSON字符串转换为JavaScript对象
+            // 类似Python的 json.loads()
+            const data = JSON.parse(message);
+
+            if (WS_CONFIG.debug) {
+                log('收到: ' + message);
+            }
+
+            // switch-case: 多重条件判断
+            // 类似Python的 if-elif-else
+            switch (data.type) {
+                case 'room_created':
+                    handleRoomCreated(data); // 调用处理函数
+                    break; // 跳出switch（类似Python的break）
+                case 'room_joined':
+                    handleRoomJoined(data);
+                    break;
+                case 'move_placed':
+                    handleMovePlaced(data);
+                    break;
+                case 'error':
+                    handleError(data);
+                    break;
+                default:
+                    log('未知消息类型: ' + data.type);
+            }
+        } catch (error) {
+            log('解析消息失败: ' + error);
+        }
+    }
+
+    /*
+     * 函数名: handleRoomCreated(data)
+     * 作用: 处理服务器返回的房间创建结果
+     * 参数: data - 包含创建结果的JavaScript对象
+     * Python对比:
+     *   def handle_room_created(data):
+     *       if data.get('success'):
+     *           current_room_id = data['room_id']
+     *           player_id = data['player_id']
+     *           show_board()
+     *       else:
+     *           show_message(f"创建失败: {data['message']}", 'error')
+     */
+    function handleRoomCreated(data) {
+        // data.success: 检查服务器返回的success字段
+        if (data.success) {
+            // 保存服务器返回的房间ID和玩家ID
+            currentRoomId = data.roomId;
+            playerId = data.playerId;
+            myColor = data.playerColor;  // 使用服务器返回的颜色（应该是1=黑）
+
+            // 只显示房间号，不自动进入棋盘
+            // 用户需要输入房间号才能进入
+            const colorName = myColor === 1 ? '黑棋' : '白棋';
+            showMessage(`房间创建成功！<br>房间ID: <strong>${data.roomId}</strong><br>你是${colorName}，请输入此房间ID以进入游戏`, 'info');
+            log(`房间 ${data.roomId} 创建成功，你是${colorName}(playerId: ${playerId})`);
+        } else {
+            showMessage('创建房间失败: ' + data.message, 'error');
+        }
+    }
+
+    /*
+     * 函数名: handleRoomJoined(data)
+     * 作用: 处理服务器返回的加入房间结果
+     * 参数: data - 包含加入结果的JavaScript对象
+     * Python对比:
+     *   def handle_room_joined(data):
+     *       if data.get('success'):
+     *           current_room_id = data['room_id']
+     *           player_id = data['player_id']
+     *           current_player = data['player_color']  # 服务器分配的棋子颜色
+     *           show_board()
+     *       else:
+     *           show_message(f"加入失败: {data['message']}", 'error')
+     */
+    function handleRoomJoined(data) {
+        if (data.success) {
+            // 保存服务器返回的信息
+            currentRoomId = data.roomId;
+            playerId = data.playerId;
+            myColor = data.playerColor; // 服务器分配的固定棋子颜色（1=黑，2=白）
+            const colorName = myColor === 1 ? '黑棋' : '白棋';
+            log(`加入房间成功！你是${colorName}，playerId: ${playerId}`);
+            showBoard();
+        } else {
+            showMessage('加入房间失败: ' + data.message, 'error');
+        }
+    }
+
+    /*
+     * 函数名: removeStoneFromBoard(row, col)
+     * 作用: 从棋盘DOM中移除指定位置的棋子
+     * 参数: row, col - 棋子位置
+     * Python对比:
+     *   def remove_stone_from_board(row, col):
+     *       for stone in board_grid.find_elements('.stone'):
+     *           if stone.dataset.row == row and stone.dataset.col == col:
+     *               stone.remove()
+     *               break
+     */
+    function removeStoneFromBoard(row, col) {
+        const boardGrid = document.getElementById('boardGrid');
+        const stones = boardGrid.getElementsByClassName('stone');
+
+        // 遍历所有棋子，查找并移除指定位置的棋子
+        for (let i = 0; i < stones.length; i++) {
+            const stone = stones[i];
+            // dataset.row 和 dataset.col 是棋子的位置信息
+            if (parseInt(stone.dataset.row) === row &&
+                parseInt(stone.dataset.col) === col) {
+                boardGrid.removeChild(stone);
+                break;
+            }
+        }
+    }
+
+    /*
+     * 函数名: handleMovePlaced(data)
+     * 作用: 处理服务器返回的落子结果，更新棋盘显示
+     * 参数: data - 包含落子信息的JavaScript对象
+     * Python对比:
+     *   def handle_move_placed(data):
+     *       if data.get('success'):
+     *           if 'row' in data and 'col' in data:
+     *               board_state[data['row']][data['col']] = data['color']
+     *               # 创建并显示棋子
+     *               stone = create_stone_element(data['color'])
+     *               place_stone_on_board(stone, data['row'], data['col'])
+     *           current_player = data['next_player']
+     *           update_player_indicator()
+     *       else:
+     *           show_message(f"落子失败: {data['message']}", 'error')
+     */
+    function handleMovePlaced(data) {
+        if (data.success) {
+            // 更新棋盘状态
+            // data.row !== undefined: 检查属性是否存在（类似Python的 'row' in data）
+            if (data.row !== undefined && data.col !== undefined) {
+                boardState[data.row][data.col] = data.color;
+
+                // 计算棋子在屏幕上的位置
+                const x = PADDING + data.col * CELL_SIZE;
+                const y = PADDING + data.row * CELL_SIZE;
+
+                // 创建DOM元素（HTML元素）
+                // document.createElement: 类似Python的创建对象
+                const stone = document.createElement('div');
+
+                // 设置CSS类名，决定样式（黑子或白子）
+                // 三元运算符: condition ? value1 : value2
+                // 类似Python的 value1 if condition else value2
+                stone.className = 'stone ' + (data.color === 1 ? 'black' : 'white');
+
+                // 设置棋子位置
+                stone.style.left = x + 'px';  // 字符串拼接（类似Python的 f"{x}px"）
+                stone.style.top = y + 'px';
+
+                // 设置位置信息（用于提子时查找棋子）
+                stone.dataset.row = data.row;
+                stone.dataset.col = data.col;
+
+                // 将棋子添加到棋盘
+                document.getElementById('boardGrid').appendChild(stone);
+            }
+
+            // 处理提子：移除被提的棋子
+            if (data.captured && data.captured.length > 0) {
+                data.captured.forEach(pos => {
+                    boardState[pos.row][pos.col] = 0;
+                    removeStoneFromBoard(pos.row, pos.col);
+                });
+                showMessage(`提掉了 ${data.captured.length} 颗子！`, 'info');
+            }
+
+            // 更新当前玩家
+            currentPlayer = data.nextPlayer;
+            updatePlayerIndicator();
+        } else {
+            showMessage('落子失败: ' + data.message, 'error');
+        }
+    }
+
+    /*
+     * 函数名: handleError(data)
+     * 作用: 处理服务器返回的错误消息
+     * 参数: data - 包含错误信息的JavaScript对象
+     * Python对比:
+     *   def handle_error(data):
+     *       show_message(f"错误: {data['message']}", 'error')
+     */
+    function handleError(data) {
+        showMessage('错误: ' + data.message, 'error');
+    }
+
+    /*
+     * 函数名: showMessage(text, type)
+     * 作用: 在页面上显示消息提示（成功或错误）
+     * 参数:
+     *   text - 消息文本（可以是HTML）
+     *   type - 消息类型：'info'（信息）或 'error'（错误）
+     * Python对比:
+     *   def show_message(text, msg_type='info'):
+     *       bg_color = '#ffebee' if msg_type == 'error' else '#e8f5e9'
+     *       text_color = '#c62828' if msg_type == 'error' else '#2e7d32'
+     *       print(f"背景: {bg_color}, 文字: {text_color}")
+     */
+    function showMessage(text, type = 'info') {
+        const messageDiv = document.getElementById('message');
+        // 三元运算符根据type选择颜色
+        const bgColor = type === 'error' ? '#ffebee' : '#e8f5e9';
+        const textColor = type === 'error' ? '#c62828' : '#2e7d32';
+
+        // 模板字符串（template literals）
+        // 使用反引号 ` 和 ${} 插入变量
+        // 类似Python的 f"背景: {bg_color}"
+        messageDiv.innerHTML = `
+            <div style="background-color: ${bgColor}; padding: 15px; border-radius: 5px; color: ${textColor};">
+                ${text}
+            </div>
+        `;
+    }
+
+    /*
+     * 函数名: log(message)
+     * 作用: 在浏览器控制台输出日志（用于调试）
+     * 参数: message - 日志消息
+     * Python对比:
+     *   def log(message):
+     *       if debug_mode:
+     *           print(f"[GoGame] {message}")
+     */
+    function log(message) {
+        if (WS_CONFIG.debug) {
+            console.log('[GoGame] ' + message);  // console.log类似Python的print()
+        }
+    }
+
+    // ==================== 游戏逻辑 ====================
+    // 模拟的房间存储（后续可以移除）
+    const rooms = new Set();
+
+    // 围棋游戏状态
+    const BOARD_SIZE = 19;     // 棋盘大小：19×19
+    const CELL_SIZE = 30;      // 每个格子的像素大小
+    const PADDING = 20;        // 棋盘边缘内边距
+    let boardState = [];       // 棋盘状态：二维数组，0=空，1=黑，2=白
+    let currentPlayer = 1;     // 当前轮到谁下：1=黑，2=白
+    let myColor;               // 当前玩家的固定颜色：1=黑，2=白
+    let stoneCount = 0;        // 已落子数量
+
+    /*
+     * 函数名: initBoardState()
+     * 作用: 初始化棋盘状态，清空所有棋子
+     * Python对比:
+     *   def init_board_state():
+     *       board_state = [[0 for _ in range(19)] for _ in range(19)]
+     *       current_player = 1
+     *       stone_count = 0
+     */
+    function initBoardState() {
+        boardState = [];  // 重置棋盘状态
+        // 创建19×19的二维数组（类似Python的列表推导式）
+        for (let i = 0; i < BOARD_SIZE; i++) {
+            boardState[i] = [];  // 创建第i行
+            for (let j = 0; j < BOARD_SIZE; j++) {
+                boardState[i][j] = 0;  // 0表示该位置为空
+            }
+        }
+        currentPlayer = 1;  // 黑方先手
+        stoneCount = 0;
+    }
+
+    /*
+     * 函数名: createIntersections()
+     * 作用: 创建棋盘上的可点击交叉点（19×19个）
+     * Python对比:
+     *   def create_intersections():
+     *       board_grid = get_element_by_id('boardGrid')
+     *       if not board_grid:
+     *           return
+     *       for row in range(19):
+     *           for col in range(19):
+     *               intersection = create_div()
+     *               intersection.add_click_listener(lambda: place_stone(row, col))
+     *               board_grid.append(intersection)
+     */
+    function createIntersections() {
+        const boardGrid = document.getElementById('boardGrid');
+        if (!boardGrid) return;  // 如果找不到棋盘元素，直接返回
+
+        // 清除现有的交叉点和棋子
+        // querySelectorAll: 查找所有匹配的元素（类似CSS选择器）
+        const existingIntersections = boardGrid.querySelectorAll('.intersection, .stone');
+        // forEach: 遍历数组（类似Python的for循环）
+        existingIntersections.forEach(el => el.remove());
+
+        // 创建19×19个交叉点（双层for循环）
+        for (let row = 0; row < BOARD_SIZE; row++) {
+            for (let col = 0; col < BOARD_SIZE; col++) {
+                // 创建div元素（HTML元素）
+                const intersection = document.createElement('div');
+                intersection.className = 'intersection';  // 设置CSS类名
+
+                // dataset: 存储自定义数据（类似Python的对象属性）
+                intersection.dataset.row = row;
+                intersection.dataset.col = col;
+
+                // 计算交叉点在屏幕上的位置
+                const x = PADDING + col * CELL_SIZE;
+                const y = PADDING + row * CELL_SIZE;
+                intersection.style.left = x + 'px';
+                intersection.style.top = y + 'px';
+
+                // 添加点击事件监听器
+                // 箭头函数: () => placeStone(...) 类似Python的 lambda: place_stone(...)
+                intersection.addEventListener('click', () => placeStone(row, col, x, y));
+
+                // 将交叉点添加到棋盘
+                boardGrid.appendChild(intersection);
+            }
+        }
+    }
+
+    /*
+     * 函数名: placeStone(row, col, x, y)
+     * 作用: 在指定位置落子
+     * 参数:
+     *   row - 行号（0-18）
+     *   col - 列号（0-18）
+     *   x, y - 屏幕坐标（像素）
+     * Python对比:
+     *   def place_stone(row, col, x, y):
+     *       if board_state[row][col] != 0:
+     *           return  # 已有棋子
+     *       request_data = {
+     *           'type': 'place_stone',
+     *           'room_id': current_room_id,
+     *           'player_id': player_id,
+     *           'row': row,
+     *           'col': col,
+     *           'color': current_player,
+     *           'timestamp': time.time()
+     *       }
+     *       if send_to_server(request_data):
+     *           print(f"落子请求已发送")
+     *       else:
+     *           # 本地模式：直接在棋盘上显示棋子
+     *           create_stone_element(x, y, current_player)
+     *           board_state[row][col] = current_player
+     *           current_player = 2 if current_player == 1 else 1
+     */
+    function placeStone(row, col, x, y) {
+        // 检查该位置是否已有棋子
+        if (boardState[row][col] !== 0) {
+            showMessage('该位置已有棋子', 'error');
+            return; // 已有棋子，不能落子
+        }
+
+        // 检查是否轮到我下
+        if (currentPlayer !== myColor) {
+            showMessage('还没轮到你！', 'error');
+            return;
+        }
+
+        // 前端预检查：是否为自杀步
+
+        // 创建要发送给服务器的数据对象
+        const requestData = {
+            type: 'place_stone',        // 消息类型
+            roomId: currentRoomId,      // 房间ID
+            playerId: playerId,         // 玩家ID
+            row: row,                   // 行号
+            col: col,                   // 列号
+            color: myColor,             // 使用我的固定颜色（1=黑，2=白）
+            timestamp: Date.now()       // 时间戳（毫秒）
+        };
+
+        // 尝试发送到服务器
+        if (sendToServer(requestData)) {
+            // 服务器确认后会通过handleMovePlaced更新UI
+            log(`落子请求已发送: (${row}, ${col}), 颜色: ${myColor}`);
+        } else {
+            // WebSocket未连接，使用本地模式
+            const stone = document.createElement('div');
+            stone.className = 'stone ' + (myColor === 1 ? 'black' : 'white');
+            stone.style.left = x + 'px';
+            stone.style.top = y + 'px';
+            stone.dataset.row = row;
+            stone.dataset.col = col;
+
+            const boardGrid = document.getElementById('boardGrid');
+            boardGrid.appendChild(stone);
+
+            boardState[row][col] = myColor;
+            stoneCount++;
+
+            // 切换玩家（1变2，2变1）
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            updatePlayerIndicator();
+            log('使用本地模式（WebSocket未连接）');
+        }
+    }
+
+    /*
+     * 函数名: updatePlayerIndicator()
+     * 作用: 更新页面上的"当前玩家"指示器
+     * Python对比:
+     *   def update_player_indicator():
+     *       text_element = get_element_by_id('currentPlayerText')
+     *       stone_element = get_element_by_id('currentStone')
+     *       if current_player == my_color:
+     *           text_element.text = '我'
+     *       else:
+     *           text_element.text = '对方'
+     */
+    function updatePlayerIndicator() {
+        // 获取DOM元素（页面元素）
+        const text = document.getElementById('currentPlayerText');
+        const stone = document.getElementById('currentStone');
+
+        const myColorName = myColor === 1 ? '黑' : '白';
+        const currentColorName = currentPlayer === 1 ? '黑' : '白';
+
+        if (currentPlayer === myColor) {
+            text.textContent = `轮到你了 (${myColorName})`;
+            stone.style.background = myColor === 1 ?
+                'radial-gradient(circle at 30% 30%, #555, #000)' :
+                'radial-gradient(circle at 30% 30%, #fff, #ccc)';
+        } else {
+            text.textContent = `等待对方 (${currentColorName})...`;
+            stone.style.background = currentPlayer === 1 ?
+                'radial-gradient(circle at 30% 30%, #555, #000)' :
+                'radial-gradient(circle at 30% 30%, #fff, #ccc)';
+        }
+    }
+
+    
+    /*
+     * 函数名: resetGame()
+     * 作用: 重新开始游戏（清空棋盘）
+     * Python对比:
+     *   def reset_game():
+     *       if confirm("确定要重新开始吗？"):
+     *           init_board_state()
+     *           create_intersections()
+     *           update_player_indicator()
+     */
+    function resetGame() {
+        // confirm: 显示确认对话框（类似Python的input）
+        if (confirm('确定要重新开始吗？当前棋局将丢失。')) {
+            initBoardState();
+            createIntersections();
+            updatePlayerIndicator();
+        }
+    }
+
+    /*
+     * 函数名: showBoard()
+     * 作用: 显示棋盘界面，隐藏欢迎界面
+     * Python对比:
+     *   def show_board():
+     *       welcome_element.style.display = 'none'  # 隐藏
+     *       board_container.style.display = 'block'  # 显示
+     *       init_board_state()
+     *       create_intersections()
+     *       update_player_indicator()
+     */
+    function showBoard() {
+        document.getElementById('welcome').style.display = 'none';   // 隐藏欢迎界面
+        document.getElementById('boardContainer').style.display = 'block';  // 显示棋盘
+
+        // 初始化棋盘
+        initBoardState();
+        createIntersections();
+        updatePlayerIndicator();
+    }
+
+    /*
+     * ==================== 事件监听器（Event Listeners） ====================
+     * 事件监听器：当用户执行某个操作（点击、按键等）时，自动调用的函数
+     * Python对比: 类似GUI框架中的回调函数或信号槽
+     */
+
+    /*
+     * 创建房间按钮点击事件
+     * 当用户点击"Make a new room"按钮时，执行这个函数
+     */
+    document.getElementById('createRoomBtn').addEventListener('click', function() {
+        // 发送创建房间请求到服务器
+        const requestData = {
+            type: 'create_room',
+            timestamp: Date.now()
+        };
+
+        if (sendToServer(requestData)) {
+            showMessage('正在创建房间...', 'info');
+        } else {
+            // WebSocket未连接，使用本地模拟
+            const roomId = Math.floor(100000 + Math.random() * 900000);
+            rooms.add(roomId);
+
+            // 将房间ID自动填入输入框，方便用户
+            document.getElementById('roomIdInput').value = roomId;
+
+            // 只显示房间号，不自动进入棋盘
+            // 用户需要输入房间号才能进入
+            showMessage(`房间创建成功！<br>房间ID: <strong>${roomId}</strong><br>房间ID已填入输入框，点击"Join Room"进入游戏`, 'info');
+            log(`房间 ${roomId} 创建成功（本地模式）`);
+        }
+    });
+
+    /*
+     * 加入房间按钮点击事件
+     * 当用户点击"Join Room"按钮时，执行这个函数
+     */
+    document.getElementById('joinRoomBtn').addEventListener('click', function() {
+        // 获取输入框元素和值
+        const roomIdInput = document.getElementById('roomIdInput');
+        const roomId = roomIdInput.value.trim();  // trim(): 去除首尾空格
+
+        // 验证输入
+        if (!roomId) {
+            showMessage('请输入房间ID', 'error');
+            return;
+        }
+
+        // 发送加入房间请求到服务器
+        const requestData = {
+            type: 'join_room',
+            roomId: roomId,
+            timestamp: Date.now()
+        };
+
+        if (sendToServer(requestData)) {
+            showMessage('正在加入房间...', 'info');
+        } else {
+            // WebSocket未连接，使用本地模拟
+            // parseInt: 将字符串转换为整数
+            if (rooms.has(parseInt(roomId))) {
+                showMessage(`成功加入房间 ${roomId}！<br>正在进入游戏...`, 'info');
+                // setTimeout: 延迟执行函数
+                setTimeout(() => showBoard(), 1000);  // 1000毫秒后执行showBoard()
+                log('使用本地模式（WebSocket未连接）');
+            } else {
+                showMessage(`房间 ${roomId} 不存在<br>请检查房间ID或创建新房间`, 'error');
+            }
+        }
+    });
+
+    /*
+     * 输入框按键事件
+     * 当用户在房间ID输入框中按下Enter键时，自动点击加入按钮
+     * e: 事件对象（Event object），包含按键信息
+     */
+    document.getElementById('roomIdInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {  // 检查是否按下了Enter键
+            document.getElementById('joinRoomBtn').click();  // 触发按钮点击
+        }
+    });
+
+    /*
+     * 页面加载事件
+     * 当整个网页加载完成后，执行这个函数
+     * 类似Python的 if __name__ == '__main__'
+     */
+    window.addEventListener('load', function() {
+        initWebSocket();  // 初始化WebSocket连接
+        log('页面加载完成，WebSocket初始化中...');
+    });
+</script>
+</body>
+</html>
+
+
